@@ -4,13 +4,13 @@ using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace AzurePageBlobStream
 {
-    public class PageBlobStream:Stream
+    public class PageBlobStream : Stream
     {
         private readonly CloudPageBlob _pageBlob;
         private const string MetadataLengthKey = "STREAM_LENGTH";
         private const int PageSizeInBytes = 512;
 
-        private PageBlobStream(CloudPageBlob pageBlob)
+        protected PageBlobStream(CloudPageBlob pageBlob)
         {
             _pageBlob = pageBlob;
             Position = Length;
@@ -27,7 +27,7 @@ namespace AzurePageBlobStream
 
         public override void Flush()
         {
-            
+
         }
 
         public override long Seek(long offset, SeekOrigin origin)
@@ -37,7 +37,11 @@ namespace AzurePageBlobStream
 
         public override void SetLength(long value)
         {
-            throw new NotSupportedException();
+            if (value > this.Length)
+            {
+                var newSize = NextPageAddress(value);
+                _pageBlob.Resize(newSize);
+            }
         }
 
         public override int Read(byte[] buffer, int offset, int count)
@@ -49,10 +53,12 @@ namespace AzurePageBlobStream
             var pagesBefore = (int)Math.Ceiling((decimal)offsetInPage / PageSizeInBytes);
             var bufferToMerge = new byte[pageBytes + (pagesBefore * PageSizeInBytes)];
             _pageBlob.DownloadRangeToByteArray(bufferToMerge, 0, pageStartAddress, bufferToMerge.Length);
-            Buffer.BlockCopy(bufferToMerge,offsetInPage, buffer,offset,count);
+            Buffer.BlockCopy(bufferToMerge, offsetInPage, buffer, offset, count);
+            int bytesRead = count;
             if (Position + count > Length)
-                return (int) (Length - Position);
-            return count;
+                bytesRead = (int)(Length - Position);
+            Position += bytesRead;
+            return bytesRead;
         }
 
         public override void Write(byte[] buffer, int offset, int count)
@@ -64,11 +70,17 @@ namespace AzurePageBlobStream
             }
             var pageStartAddress = PreviousPageAddress(Position);
             var pageBytes = NextPageAddress(Position + count) - pageStartAddress;
-            var offsetInPage = (int)Position % PageSizeInBytes;
+            var offsetInFirstPage = (int) Position%PageSizeInBytes;
 
             var bufferToMerge = new byte[pageBytes];
-            _pageBlob.DownloadRangeToByteArray(bufferToMerge, 0, pageStartAddress, bufferToMerge.Length);
-            Buffer.BlockCopy(buffer, offset, bufferToMerge, offsetInPage, count);
+            if (offsetInFirstPage > 0)
+                _pageBlob.DownloadRangeToByteArray(bufferToMerge, 0, pageStartAddress, PageSizeInBytes);
+            var offsetInLastPage = (offsetInFirstPage + count)%512;
+            if (pageBytes > PageSizeInBytes && offsetInLastPage > 0)
+                _pageBlob.DownloadRangeToByteArray(bufferToMerge, (int)pageBytes-512, PreviousPageAddress(Position + count),
+                    PageSizeInBytes);
+
+            Buffer.BlockCopy(buffer, offset, bufferToMerge, offsetInFirstPage, count);
             using (var memoryStream = new MemoryStream(bufferToMerge, false))
             {
                 memoryStream.Position = 0;

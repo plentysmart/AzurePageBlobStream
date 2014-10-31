@@ -35,6 +35,8 @@ namespace AzurePageBlobStream.Tests
             Action<Stream> operation = stream =>
             {
                 stream.Write(data, 0, data.Length);
+                stream.Flush();
+
             };
             VerifyAgainstMemoryStream(operation, x=> x.Position);
         }
@@ -46,6 +48,7 @@ namespace AzurePageBlobStream.Tests
             Action<Stream> operation = stream =>
             {
                 stream.Write(data, 0, data.Length);
+                stream.Flush();
             };
             VerifyAgainstMemoryStream(operation, x=> x.Length);
         }
@@ -59,6 +62,7 @@ namespace AzurePageBlobStream.Tests
             {
                 stream.Write(data, 0, data.Length);
                 stream.Write(data2, 0, data2.Length);
+                stream.Flush();
             };
             VerifyAgainstMemoryStream(operation, x => x.Length);
         }
@@ -72,6 +76,8 @@ namespace AzurePageBlobStream.Tests
             {
                 stream.Write(data, 0, data.Length);
                 stream.Write(data2, 0, data2.Length);
+                stream.Flush();
+
             };
             VerifyAgainstMemoryStream(operation, x => x.Position);
         } 
@@ -86,6 +92,8 @@ namespace AzurePageBlobStream.Tests
                 stream.Write(data, 0, data.Length);
                 stream.Position = 10;
                 stream.Write(data2, 0, data2.Length);
+                stream.Flush();
+
             };
             VerifyAgainstMemoryStream(operation, x => x.Length);
         }
@@ -98,8 +106,12 @@ namespace AzurePageBlobStream.Tests
             Action<Stream> operation = stream =>
             {
                 stream.Write(data, 0, data.Length);
+                stream.Flush();
                 stream.Position = 10;
+
                 stream.Write(data2, 0, data2.Length);
+                stream.Flush();
+
             };
             VerifyAgainstMemoryStream(operation, x => x.Position);
         }
@@ -113,6 +125,7 @@ namespace AzurePageBlobStream.Tests
             {
                 stream.Write(data, 0, data.Length);
                 stream.Write(data2, 0, data2.Length);
+                stream.Flush();
             };
             VerifyAgainstMemoryStream(operation, x =>
             {
@@ -133,10 +146,32 @@ namespace AzurePageBlobStream.Tests
                 stream.Write(data, 0, data.Length);
                 stream.Position = 10;
                 stream.Write(data2, 0, data2.Length);
+                stream.Flush();
+
             };
             VerifyAgainstMemoryStream(operation, x =>
             {
                 var buffer = new byte[data.Length + data2.Length];
+                x.Position = 0;
+                x.Read(buffer, 0, buffer.Length);
+                return buffer;
+            });
+        }    
+        [Fact]
+        public void WriteRead_OverLappingWritesSecondWriteWithinFirst_StreamShouldReturnAllWritenData()
+        {
+            var data = GenerateRandomData(3900);
+            var data2 = GenerateRandomData(1000);
+            Action<Stream> operation = stream =>
+            {
+                stream.Write(data, 0, data.Length);
+                stream.Position = 10;
+                stream.Write(data2, 0, data2.Length);
+                stream.Flush();
+            };
+            VerifyAgainstMemoryStream(operation, x =>
+            {
+                var buffer = new byte[data.Length];
                 x.Position = 0;
                 x.Read(buffer, 0, buffer.Length);
                 return buffer;
@@ -152,6 +187,7 @@ namespace AzurePageBlobStream.Tests
             using (var pageBlobStream = InitializeReadWriteStream(pageBlob))
             {
                 pageBlobStream.Write(data,0,data.Length);
+                pageBlobStream.Flush();
                 length = pageBlobStream.Length;
                 position = pageBlobStream.Position;
             }
@@ -173,15 +209,21 @@ namespace AzurePageBlobStream.Tests
                 using (var pageBlobStream = InitializeReadWriteStream(multipleStreamsBlob))
                 {
                     pageBlobStream.Write(data, 0, data.Length);
+                    pageBlobStream.Flush();
+
                     singleStream.Write(data, 0, data.Length);
+                    singleStream.Flush();
+
                 }
                 var data2 = GenerateRandomData(3212);
                 using (var pageBlobStream = InitializeReadWriteStream(multipleStreamsBlob))
                 {
                     pageBlobStream.Write(data2, 0, data.Length);
+                    pageBlobStream.Flush();
                     singleStream.Write(data2, 0, data.Length);
+                    singleStream.Flush();
                 }
-
+                
                 using (var pageBlobStream = InitializeReadWriteStream(multipleStreamsBlob))
                 {
                     Assert.Equal(singleStream.Position, pageBlobStream.Position);
@@ -197,12 +239,50 @@ namespace AzurePageBlobStream.Tests
             Action<Stream> operation = stream =>
             {
                 stream.Write(data, 0, data.Length);
+                stream.Flush();
             };
             VerifyAgainstMemoryStream(operation, x =>
             {
                 var buffer = new byte[400];
                 x.Position = 1800;
                 return x.Read(buffer, 0, buffer.Length);
+            });
+        } 
+
+        [Fact]
+        public void Read_EndOfTheStream_PositionShouldBeConsistentWithMemoryStream()
+        {
+            var data = GenerateRandomData(1900);
+            Action<Stream> operation = stream =>
+            {
+                stream.Write(data, 0, data.Length);
+                stream.Flush();
+
+            };
+            VerifyAgainstMemoryStream(operation, x =>
+            {
+                var buffer = new byte[400];
+                x.Position = 1800;
+                x.Read(buffer, 0, buffer.Length);
+                return x.Position;
+            });
+        }    
+        
+        [Fact]
+        public void Read_WithinStream_ShouldBeConsistentWithMemoryStream()
+        {
+            var data = GenerateRandomData(1900);
+            Action<Stream> operation = stream =>
+            {
+                stream.Write(data, 0, data.Length);
+                stream.Flush();
+            };
+            VerifyAgainstMemoryStream(operation, x =>
+            {
+                var buffer = new byte[400];
+                x.Position = 0;
+                x.Read(buffer, 0, buffer.Length);
+                return x.Position;
             });
         }
 
@@ -213,6 +293,7 @@ namespace AzurePageBlobStream.Tests
             Action<Stream> operation = stream =>
             {
                 stream.Write(data, 0, data.Length);
+                stream.Flush();
             };
             VerifyAgainstMemoryStream(operation, x =>
             {
@@ -243,7 +324,7 @@ namespace AzurePageBlobStream.Tests
 
         private Stream InitializeReadWriteStream(CloudPageBlob pageBlob)
         {
-            return PageBlobStream.Open(pageBlob);
+            return BufferedPageBlobStream.Open(pageBlob);
         }
     }
 }

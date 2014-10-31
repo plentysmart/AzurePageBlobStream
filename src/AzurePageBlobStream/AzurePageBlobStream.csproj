@@ -66,8 +66,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BufferedPageBlobStream.cs" />
     <Compile Include="PageBlobStream.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WriteBuffer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -161,6 +161,65 @@ namespace AzurePageBlobStream.Tests
                 Assert.Equal(position, pageBlobStream.Position);
             }
         }
+        [Fact]
+        public void Open_SubsequentWritesWithNewStream_ShouldHaveTheSameEffectAsWritingToSingleStream()
+        {
+            var multipleStreamsBlob = container.GetPageBlobReference(PageBlobName);
+            var singleStreamBlob = container.GetPageBlobReference(PageBlobName +"Single");
+            using (var singleStream = InitializeReadWriteStream(singleStreamBlob))
+            {
+                 var data = GenerateRandomData(1900);
+
+                using (var pageBlobStream = InitializeReadWriteStream(multipleStreamsBlob))
+                {
+                    pageBlobStream.Write(data, 0, data.Length);
+                    singleStream.Write(data, 0, data.Length);
+                }
+                var data2 = GenerateRandomData(3212);
+                using (var pageBlobStream = InitializeReadWriteStream(multipleStreamsBlob))
+                {
+                    pageBlobStream.Write(data2, 0, data.Length);
+                    singleStream.Write(data2, 0, data.Length);
+                }
+
+                using (var pageBlobStream = InitializeReadWriteStream(multipleStreamsBlob))
+                {
+                    Assert.Equal(singleStream.Position, pageBlobStream.Position);
+                    Assert.Equal(singleStream.Length, pageBlobStream.Length);
+                }
+            }
+        }
+
+        [Fact]
+        public void Read_EndOfTheStream_ShouldBeConsistentWithMemoryStream()
+        {
+            var data = GenerateRandomData(1900);
+            Action<Stream> operation = stream =>
+            {
+                stream.Write(data, 0, data.Length);
+            };
+            VerifyAgainstMemoryStream(operation, x =>
+            {
+                var buffer = new byte[400];
+                x.Position = 1800;
+                return x.Read(buffer, 0, buffer.Length);
+            });
+        }
+
+        [Fact]
+        public void ReadByte_EndOfTheStream_ShouldBeConsistentWithMemoryStream()
+        {
+            var data = GenerateRandomData(1900);
+            Action<Stream> operation = stream =>
+            {
+                stream.Write(data, 0, data.Length);
+            };
+            VerifyAgainstMemoryStream(operation, x =>
+            {
+                var readByte = x.ReadByte();
+                return readByte;
+            });
+        }
 
         public void VerifyAgainstMemoryStream<T>(Action<Stream> operation, Func<Stream, T> propertyToVerify)
         {

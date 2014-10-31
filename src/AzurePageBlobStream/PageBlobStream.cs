@@ -13,7 +13,6 @@ namespace AzurePageBlobStream
         private PageBlobStream(CloudPageBlob pageBlob)
         {
             _pageBlob = pageBlob;
-            _pageBlob.FetchAttributes();
             Position = Length;
         }
 
@@ -51,6 +50,8 @@ namespace AzurePageBlobStream
             var bufferToMerge = new byte[pageBytes + (pagesBefore * PageSizeInBytes)];
             _pageBlob.DownloadRangeToByteArray(bufferToMerge, 0, pageStartAddress, bufferToMerge.Length);
             Buffer.BlockCopy(bufferToMerge,offsetInPage, buffer,offset,count);
+            if (Position + count > Length)
+                return (int) (Length - Position);
             return count;
         }
 
@@ -107,6 +108,7 @@ namespace AzurePageBlobStream
         {
             get
             {
+                _pageBlob.FetchAttributes();
                 var realLength = 0L;
                 if (!_pageBlob.Metadata.ContainsKey(MetadataLengthKey) ||
                     !long.TryParse(_pageBlob.Metadata[MetadataLengthKey], out realLength))

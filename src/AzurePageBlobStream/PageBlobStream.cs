@@ -13,6 +13,8 @@ namespace AzurePageBlobStream
         private PageBlobStream(CloudPageBlob pageBlob)
         {
             _pageBlob = pageBlob;
+            _pageBlob.FetchAttributes();
+            Position = Length;
         }
 
         private long BlobLength
@@ -105,9 +107,9 @@ namespace AzurePageBlobStream
         {
             get
             {
-                var length = _pageBlob.Metadata[MetadataLengthKey];
                 var realLength = 0L;
-                if (!long.TryParse(length, out realLength))
+                if (!_pageBlob.Metadata.ContainsKey(MetadataLengthKey) ||
+                    !long.TryParse(_pageBlob.Metadata[MetadataLengthKey], out realLength))
                 {
                     SetLengthInternal(0);
                     return 0;

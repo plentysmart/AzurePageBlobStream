@@ -143,6 +143,25 @@ namespace AzurePageBlobStream.Tests
             });
         }
 
+        [Fact]
+        public void Open_OpeningExistingBlob_ShouldSetPositionToTheEndOfTheBlob()
+        {
+            var pageBlob = container.GetPageBlobReference(PageBlobName);
+            var data = GenerateRandomData(1900);
+            long length, position;
+            using (var pageBlobStream = InitializeReadWriteStream(pageBlob))
+            {
+                pageBlobStream.Write(data,0,data.Length);
+                length = pageBlobStream.Length;
+                position = pageBlobStream.Position;
+            }
+            using (var pageBlobStream = InitializeReadWriteStream(pageBlob))
+            {
+                Assert.Equal(length, pageBlobStream.Length);
+                Assert.Equal(position, pageBlobStream.Position);
+            }
+        }
+
         public void VerifyAgainstMemoryStream<T>(Action<Stream> operation, Func<Stream, T> propertyToVerify)
         {
             var pageBlob = container.GetPageBlobReference(PageBlobName);

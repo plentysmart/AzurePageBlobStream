@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.Remoting.Channels;
@@ -80,7 +81,50 @@ namespace AzurePageBlobStream.Tests
 
             };
             VerifyAgainstMemoryStream(operation, x => x.Position);
-        } 
+        }
+
+        [Fact]
+        public void Write_MultipleSequentialWritesWithRandomBufferOffsetAndCount_StreamsShouldBeEqual()
+        {
+            while (true)
+            {
+                if (container.Exists())
+                    container.Delete();
+                container.Create();
+                var seed = Guid.NewGuid().GetHashCode();
+                //var seed = -541785277;
+                var random = new Random(seed);
+                Debug.WriteLine("Seed: {0}", seed);
+
+                var generatedWrites = new List<Tuple<byte[], int, int>>();
+                for (int i = 0; i < 1000; i++)
+                {
+                    var bufferSize = random.Next(1, 1000);
+                    var offset = random.Next(0, bufferSize - 1);
+                    var count = random.Next(1, bufferSize - offset);
+                    var data = GenerateRandomData(bufferSize, random);
+                    generatedWrites.Add(new Tuple<byte[], int, int>(data, offset, count));
+                }
+                Action<Stream> operation = stream =>
+                {
+                    foreach (var generatedWrite in generatedWrites)
+                    {
+                        stream.Write(generatedWrite.Item1, generatedWrite.Item2, generatedWrite.Item3);
+                    }
+                    stream.Flush();
+
+                };
+                VerifyAgainstMemoryStream(operation, x =>
+                {
+                    var buffer = new byte[x.Length];
+                    x.Position = 0;
+                    x.Read(buffer, 0, buffer.Length);
+                    return buffer;
+                });
+            }
+        }
+
+
         [Fact]
         public void Write_MultipleWrites_ShouldWriteDataCorrecly()
         {
@@ -327,51 +371,57 @@ namespace AzurePageBlobStream.Tests
         [Fact]
         public void Write_CheckAgainstFileStream_RandomWrite_FileShouldBeTheSameAsPageBlob()
         {
-            string fileName = string.Format("{0:dd-MM-yyyy_hh_mm_ss}.bin", DateTime.Now);
-            var random = new Random();
-            using (var stream = File.OpenWrite(fileName))
             {
-                var pageblob = container.GetPageBlobReference(fileName);
-                using (var blobStream = BufferedPageBlobStream.Open(pageblob))
+                string fileName = string.Format("{0:dd-MM-yyyy_hh_mm_ss}.bin", DateTime.Now);
+                var seed = Guid.NewGuid().GetHashCode();
+                var random = new Random(seed);
+                Debug.WriteLine("Seed: {0}", seed);
+                using (var stream = File.OpenWrite(fileName))
                 {
-                    while (stream.Length < 100*1024*1024)
+                    var pageblob = container.GetPageBlobReference(fileName);
+                    using (var blobStream = BufferedPageBlobStream.Open(pageblob))
                     {
-                        var data = GenerateRandomData(random.Next(5, 15*1024*1024), random);
-                        stream.Write(data, 0, data.Length);
-                        blobStream.Write(data, 0 ,data.Length);
-                        stream.Flush();
-                        blobStream.Flush();
+                        while (stream.Length < 100*1024*1024)
+                        {
+                            var data = GenerateRandomData(random.Next(5, 15*1024*1024), random);
+                            stream.Write(data, 0, data.Length);
+                            blobStream.Write(data, 0, data.Length);
+                            if (blobStream.PendingWritesSize > 3*1024*1024)
+                            {
+                                stream.Flush();
+                                blobStream.Flush();
+                            }
+                        }
+                        for (int i = 0; i < 100; i++)
+                        {
+                            var startAddress = random.Next(0, (int) (stream.Length - 1));
+                            var howManyBytes = random.Next(3, 100*1024);
+                            var data = GenerateRandomData(howManyBytes, random);
+                            stream.Position = startAddress;
+                            blobStream.Position = startAddress;
+                            stream.Write(data, 0, data.Length);
+                            blobStream.Write(data, 0, data.Length);
+                            stream.Flush();
+                            blobStream.Flush();
+                        }
                     }
-                    for (int i = 0; i < 100; i++)
+                    stream.Close();
+                }
+
+                using (var stream = File.OpenRead(fileName))
+                {
+                    var pageblob = container.GetPageBlobReference(fileName);
+                    using (var blobStream = BufferedPageBlobStream.Open(pageblob))
                     {
-                        var startAddress = random.Next(0, (int)(stream.Length - 1));
-                        var howManyBytes = random.Next(3, 100*1024);
-                        var data = GenerateRandomData(howManyBytes, random);
-                        stream.Position = startAddress;
-                        blobStream.Position = startAddress;
-                        stream.Write(data, 0, data.Length);
-                        blobStream.Write(data, 0, data.Length);
-                        stream.Flush();
-                        blobStream.Flush();
+                        blobStream.Position = 0;
+                        stream.Position = 0;
+                        AssertStreamsAreEqual(stream, blobStream);
                     }
                 }
-                stream.Close();
             }
-
-            using (var stream = File.OpenRead(fileName))
-            {
-                var pageblob = container.GetPageBlobReference(fileName);
-                using (var blobStream = BufferedPageBlobStream.Open(pageblob))
-                {
-                    blobStream.Position = 0;
-                    stream.Position = 0;
-                    AssertStreamsAreEqual(stream, blobStream);
-                }
-            }
-
         }
 
-        private void AssertStreamsAreEqual(FileStream stream, Stream blobStream)
+        private void AssertStreamsAreEqual(Stream stream, Stream blobStream)
         {
             // Check the file sizes. If they are not the same, the files 
             // are not the same.
@@ -408,7 +458,40 @@ namespace AzurePageBlobStream.Tests
         [Fact]
         public void Write_CheckAgainstFileStream_SequentialWrite_FileShouldBeTheSameAsPageBlob()
         {
-            
+            string fileName = string.Format("{0:dd-MM-yyyy_hh_mm_ss}.bin", DateTime.Now);
+            var random = new Random();
+            using (var stream = File.OpenWrite(fileName))
+            {
+                var pageblob = container.GetPageBlobReference(fileName);
+                using (var blobStream = BufferedPageBlobStream.Open(pageblob))
+                {
+                    while (stream.Length < 1*1024*1024)
+                    {
+                        var dataSize = random.Next(1, 100) >= 50 ? 1 : random.Next(100, 10000);
+                        var data = new byte[dataSize];
+                        random.NextBytes(data);
+                        stream.Write(data, 0, data.Length);
+                        blobStream.Write(data, 0, data.Length);
+                        if (blobStream.PendingWritesSize > 100*1024)
+                        {
+                            stream.Flush();
+                            blobStream.Flush();
+                        }
+                    }
+                }
+            }
+
+            using (var stream = File.OpenRead(fileName))
+            {
+                var pageblob = container.GetPageBlobReference(fileName);
+                using (var blobStream = BufferedPageBlobStream.Open(pageblob))
+                {
+                    blobStream.Position = 0;
+                    stream.Position = 0;
+                    AssertStreamsAreEqual(stream, blobStream);
+                }
+            }
+
         }
 
         public void VerifyAgainstMemoryStream<T>(Action<Stream> operation, Func<Stream, T> propertyToVerify)

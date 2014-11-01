@@ -53,8 +53,9 @@ namespace AzurePageBlobStream
         public WriteOperation(long position, byte[] buffer, int offset, int count)
         {
             Position = position;
-            Buffer = buffer;
-            Offset = offset;
+            Buffer = new byte[count];
+            System.Buffer.BlockCopy(buffer,0,Buffer,0,count);
+            Offset = 0;
             Count = count;
         }
 

@@ -53,6 +53,7 @@ namespace AzurePageBlobStream
             var pagesBefore = (int)Math.Ceiling((decimal)offsetInPage / PageSizeInBytes);
             var bufferToMerge = new byte[pageBytes + (pagesBefore * PageSizeInBytes)];
             _pageBlob.DownloadRangeToByteArray(bufferToMerge, 0, pageStartAddress, bufferToMerge.Length);
+     
             Buffer.BlockCopy(bufferToMerge, offsetInPage, buffer, offset, count);
             int bytesRead = count;
             if (Position + count > Length)

@@ -86,8 +86,9 @@ namespace AzurePageBlobStream
                 memoryStream.Position = 0;
                 _pageBlob.WritePages(memoryStream, pageStartAddress);
             }
-            SetLengthInternal(Position + count);
             Position += count;
+            if(this.Position > this.Length)
+                SetLengthInternal(Position);
         }
 
         private long NextPageAddress(long position)

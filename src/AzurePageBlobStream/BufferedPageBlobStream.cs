@@ -15,7 +15,8 @@ namespace AzurePageBlobStream
 
         public override void Flush()
         {
-            base.SetLength(writeBuffer.Length);
+            if(writeBuffer.Length > this.Length)
+                base.SetLength(writeBuffer.Length);
             foreach (var pendingOperation in writeBuffer.PendingOperations)
             {
                 base.Position = pendingOperation.Position;

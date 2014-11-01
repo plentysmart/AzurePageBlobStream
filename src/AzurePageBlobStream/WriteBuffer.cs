@@ -6,15 +6,14 @@ namespace AzurePageBlobStream
 {
     public class WriteBuffer
     {
-        private readonly long _currentLength;
-        private readonly long _currentPosition;
+
 
         private List<WriteOperation> operations = new List<WriteOperation>();
 
         public WriteBuffer(long currentLength, long currentPosition)
         {
-            _currentLength = currentLength;
-            _currentPosition = currentPosition;
+            this.Length = currentLength;
+            this.Position= currentPosition;
         }
 
         public long Length { get; private set; }

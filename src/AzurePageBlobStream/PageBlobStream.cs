@@ -48,7 +48,7 @@ namespace AzurePageBlobStream
         {
             var pageStartAddress = PreviousPageAddress(Position);
             var pageBytes = NextPageAddress(count);
-            var offsetInPage = (int)Position % PageSizeInBytes;
+            var offsetInPage = (int)(Position % PageSizeInBytes);
 
             var pagesBefore = (int)Math.Ceiling((decimal)offsetInPage / PageSizeInBytes);
             var bufferToMerge = new byte[pageBytes + (pagesBefore * PageSizeInBytes)];
@@ -71,7 +71,7 @@ namespace AzurePageBlobStream
             }
             var pageStartAddress = PreviousPageAddress(Position);
             var pageBytes = NextPageAddress(Position + count) - pageStartAddress;
-            var offsetInFirstPage = (int) Position%PageSizeInBytes;
+            var offsetInFirstPage = (int) (Position%PageSizeInBytes);
 
             var bufferToMerge = new byte[pageBytes];
             if (offsetInFirstPage > 0)

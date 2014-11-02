@@ -75,6 +75,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BufferedPageBlobStreamTests.cs" />
     <Compile Include="CloudStorageEmulatorShepherd.cs" />
     <Compile Include="PageBlobStreamTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

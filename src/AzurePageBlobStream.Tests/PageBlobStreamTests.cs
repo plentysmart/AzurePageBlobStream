@@ -86,42 +86,38 @@ namespace AzurePageBlobStream.Tests
         [Fact]
         public void Write_MultipleSequentialWritesWithRandomBufferOffsetAndCount_StreamsShouldBeEqual()
         {
-            while (true)
+            if (container.Exists())
+                container.Delete();
+            container.Create();
+            var seed = Guid.NewGuid().GetHashCode();
+            var random = new Random(seed);
+            Debug.WriteLine("Seed: {0}", seed);
+
+            var generatedWrites = new List<Tuple<byte[], int, int>>();
+            for (int i = 0; i < 1000; i++)
             {
-                if (container.Exists())
-                    container.Delete();
-                container.Create();
-                var seed = Guid.NewGuid().GetHashCode();
-                //var seed = -541785277;
-                var random = new Random(seed);
-                Debug.WriteLine("Seed: {0}", seed);
-
-                var generatedWrites = new List<Tuple<byte[], int, int>>();
-                for (int i = 0; i < 1000; i++)
-                {
-                    var bufferSize = random.Next(1, 1000);
-                    var offset = random.Next(0, bufferSize - 1);
-                    var count = random.Next(1, bufferSize - offset);
-                    var data = GenerateRandomData(bufferSize, random);
-                    generatedWrites.Add(new Tuple<byte[], int, int>(data, offset, count));
-                }
-                Action<Stream> operation = stream =>
-                {
-                    foreach (var generatedWrite in generatedWrites)
-                    {
-                        stream.Write(generatedWrite.Item1, generatedWrite.Item2, generatedWrite.Item3);
-                    }
-                    stream.Flush();
-
-                };
-                VerifyAgainstMemoryStream(operation, x =>
-                {
-                    var buffer = new byte[x.Length];
-                    x.Position = 0;
-                    x.Read(buffer, 0, buffer.Length);
-                    return buffer;
-                });
+                var bufferSize = random.Next(1, 1000);
+                var offset = random.Next(0, bufferSize - 1);
+                var count = random.Next(1, bufferSize - offset);
+                var data = GenerateRandomData(bufferSize, random);
+                generatedWrites.Add(new Tuple<byte[], int, int>(data, offset, count));
             }
+            Action<Stream> operation = stream =>
+            {
+                foreach (var generatedWrite in generatedWrites)
+                {
+                    stream.Write(generatedWrite.Item1, generatedWrite.Item2, generatedWrite.Item3);
+                }
+                stream.Flush();
+
+            };
+            VerifyAgainstMemoryStream(operation, x =>
+            {
+                var buffer = new byte[x.Length];
+                x.Position = 0;
+                x.Read(buffer, 0, buffer.Length);
+                return buffer;
+            });
         }
 
 
@@ -514,9 +510,9 @@ namespace AzurePageBlobStream.Tests
             return data;
         }
 
-        private Stream InitializeReadWriteStream(CloudPageBlob pageBlob)
+        protected virtual Stream InitializeReadWriteStream(CloudPageBlob pageBlob)
         {
-            return BufferedPageBlobStream.Open(pageBlob);
+            return PageBlobStream.Open(pageBlob);
         }
     }
 }
